@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Document</title>
+</head>
+<body>
+import random
+import numpy as np
+from qiskit import QuantumCircuit
+from qiskit_aer import AerSimulator
+from qiskit.quantum_info import SparsePauliOp
+
+# Проверка без шума
+def build_bell():
+    qc = QuantumCircuit(2, 2)
+    qc.h(0)        # суперпозиция
+    qc.cx(0, 1)    # запутанность -> состояние Белла
+    return qc
+
+def measure_in_basis(qc, angle_a, angle_b):
+    qc.ry(-2 * angle_a, 0)   
+    qc.ry(-2 * angle_b, 1)   
+    qc.measure([0, 1], [0, 1])
+    return qc
+
+def correlation_from_counts(counts, shots):
+    e = 0
+    for bitstring, n in counts.items():
+        b0, b1 = int(bitstring[0]), int(bitstring[1])
+        e += (1 if b0 == b1 else -1) * n / shots
+    return e
+
+def compute_S_ideal(angles, shots=4096):
+    sim = AerSimulator()
+    E = []
+    for a, b in angles:
+        qc = build_bell()
+        qc = measure_in_basis(qc, a, b)
+        result = sim.run(qc, shots=shots).result()
+        counts = result.get_counts()
+        E.append(correlation_from_counts(counts, shots))
+    S = E[0] + E[1] + E[2] - E[3]
+    return S, E
+
+# Биты
+def classical_answer(lam, angle):
+    return 1 if np.cos(angle) * (1 if lam == 0 else -1) > 0 else -1
+
+def compute_Sclassical(angles, shots=100000):
+    E = []
+    for a, b in angles:
+        corr = 0
+        for _ in range(shots):
+            lam = random.randint(0, 1)          # общий скрытый параметр
+            A = classical_answer(lam, a)
+            B = classical_answer(lam, b)
+            corr += A * B
+        E.append(corr / shots)
+    S = E[0] + E[1] + E[2] - E[3]
+    return S, E
+
+print(compute_S_ideal([(0, np.pi/8), (0, -np.pi/8), (np.pi/4, np.pi/8), (np.pi/4, -np.pi/8)]))
+print(compute_Sclassical([(0, np.pi/8), (0, -np.pi/8), (np.pi/4, np.pi/8), (np.pi/4, -np.pi/8)], shots=100000))
+    
+</body>
+</html>
