@@ -61,8 +61,52 @@ def compute_Sclassical(angles, shots=100000):
     S = E[0] + E[1] + E[2] - E[3]
     return S, E
 
+#Проверка с шумом
+def make_noise_model(p_gate=0.01, p_meas=0.02):
+    noise = NoiseModel()
+    # ошибка однокубитного гейта
+    noise.add_all_qubit_quantum_error(depolarizing_error(p_gate, 1), ['h', 'ry'])
+    # ошибка двухкубитного гейта
+    noise.add_all_qubit_quantum_error(depolarizing_error(p_gate*5, 2), ['cx'])
+    # ошибка измерения
+    ro = ReadoutError([[1-p_meas, p_meas], [p_meas, 1-p_meas]])
+    noise.add_all_qubit_readout_error(ro)
+    return noise
+
+def compute_S_noisy(angles, p_gate=0.01, p_meas=0.02, shots=4096):
+    sim = AerSimulator(noise_model=make_noise_model(p_gate, p_meas))
+    E = []
+    for a, b in angles:
+        qc = build_bell()
+        qc = measure_in_basis(qc, a, b)
+        counts = sim.run(qc, shots=shots).result().get_counts()
+        E.append(correlation_from_counts(counts, shots))
+    return E[0] + E[1] + E[2] - E[3], E
+
+# Создание графика
+angles = [(0, np.pi/8), (0, -np.pi/8), (np.pi/4, np.pi/8), (np.pi/4, -np.pi/8)]
+
+S_ideal, _ = compute_S_ideal(angles)
+S_classical, _ = compute_Sclassical(angles)
+
+noise_levels = np.linspace(0, 0.05, 11)
+S_noisy = [compute_S_noisy(angles, p_gate=p)[0] for p in noise_levels]
+
+plt.figure(figsize=(8, 5))
+plt.axhline(2, color='red', linestyle='--', label='Классический предел (S=2)')
+plt.axhline(2*np.sqrt(2), color='green', linestyle=':', label='Квантовый максимум (2√2)')
+plt.plot(noise_levels, S_noisy, 'o-', label='Квант с шумом')
+plt.axhline(S_ideal, color='blue', alpha=0.3, label='Идеальный квант')
+plt.axhline(S_classical, color='orange', alpha=0.5, label='Классическая имитация')
+plt.xlabel('Вероятность ошибки гейта')
+plt.ylabel('Параметр S (CHSH)')
+plt.legend()
+plt.title('Деградация квантовой запутанности под действием шума')
+plt.grid(True)
+plt.show()
+
+print(compute_S_noisy([(0, np.pi/8), (0, -np.pi/8), (np.pi/4, np.pi/8), (np.pi/4, -np.pi/8)]))
 print(compute_S_ideal([(0, np.pi/8), (0, -np.pi/8), (np.pi/4, np.pi/8), (np.pi/4, -np.pi/8)]))
-print(compute_Sclassical([(0, np.pi/8), (0, -np.pi/8), (np.pi/4, np.pi/8), (np.pi/4, -np.pi/8)], shots=100000))
-    
+print(compute_Sclassical([(0, np.pi/8), (0, -np.pi/8), (np.pi/4, np.pi/8), (np.pi/4, -np.pi/8)], shots=100000))   
 </body>
 </html>
